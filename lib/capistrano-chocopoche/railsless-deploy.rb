@@ -16,12 +16,13 @@ configuration.load do
   # Remove rails specific vars
   unset :rails_env
 
+  # Empty shared children
+  set :shared_children, []
+
   # Override `deploy to` to a more common path
   if exists?(:stages)
-    logger.important "YYYYYYYYY"
     set(:deploy_to) { "/home/#{user}/apps/#{application}.#{stage}" }
   else
-    logger.important "NOOOOOOOO"
     set(:deploy_to) { "/home/#{user}/apps/#{application}" }
   end
 

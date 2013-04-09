@@ -4,7 +4,7 @@ $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 
 Gem::Specification.new do |spec|
   spec.name          = "capistrano-chocopoche"
-  spec.version       = "0.0.1"
+  spec.version       = "0.0.2"
   spec.authors       = ["Corentin Merot"]
   spec.email         = ["cmerot@themarqueeblink.com"]
   spec.description   = %q{Capistrano recipes, with another railsless-deploy and a files utility.}

@@ -39,6 +39,7 @@ server 'localhost', :app, :web, :db, :primary => true
 
 # # default settings
 # set :files_tmp_dir,           'tmp/capistrano-chocopoche/files'
+# set :deploy_to,               '/home/#{user}/apps/#{application}[.#{stage}]'
 ```
 
 ## Railsless-deploy
@@ -65,16 +66,65 @@ The last one implements the atomic symlink as suggested in the
 
 ## Files
 
-The **files:download** task will rsync files from the first web server in
-`shared/your/directory` to a local temporary directory `tmp/capistrano-chocopoche/files/your/directory`.
+The `download` and `upload` tasks use a temporary directory as pivot, so you are
+able to sync stages together.
 
-The **files:upload** task will do the opposite of the **files:download** task.
+The following scenario assumes that all commands are launch from the dev stage,
+and that you have 3 environements:
 
-The **files:create_symlinks** creates symlinks from the shared to the current.
-The equivalent for the Capfile example:
+- dev: may only contains the cap recipe
+- staging: a stage without files and symlinks
+- prod: a stage with files and symlinks. Prod looks like:
 
-    $ mkdir -p #{current_path}/public
-    $ ln -fs #{shared_path}/public/upload #{current_path}/public
+        my-project.prod/
+        ├── current/
+        │   └── public/
+        │       └── upload/         => symlink to my-project/shared/public/upload/
+        └── shared/
+            └── public/
+                └── upload/         => git ignores that folder
+                    ├── file1.png
+                    ├── file2.png
+                    ...
+
+`cap prod files:download` would download `prod:my-project/shared/public/upload`
+to `dev:my-project/tmp/capistrano-chocopoche/files/public/upload`:
+
+    my-project.dev/
+    ├── current/
+    ├── shared/
+    └── tmp/
+        └── capistrano-chocopoche/
+            └── files/
+                └── public/
+                    └── upload/
+                        ├── file1.png
+                        ├── file2.png
+                        ...
+
+2. `cap dev files:upload` would produce
+
+And finally, a `cap dev files:create_symlinks` woud produce
+
+    my-project.dev/
+    ├── current/
+    │   └── public/
+    │       └── upload/         => symlink to my-project/shared/public/upload/
+    ├── shared/
+    │   └── public/
+    │       └── upload/         => git ignores that folder
+    │           ├── file1.png
+    │           ├── file2.png
+    │           ...
+    └── tmp/
+        └── capistrano-chocopoche/
+            └── files/
+                └── public/
+                    └── upload/
+                        ├── file1.png
+                        ├── file2.png
+                        ...
+
 
 ## License
 
