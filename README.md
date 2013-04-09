@@ -9,7 +9,7 @@ My capistrano poche contains:
 
     $ gem install capistrano-chocopoche
 
-## Example of a Capfile
+## Capfile example
 
 ```ruby
 # Capistrao defaults
@@ -34,8 +34,8 @@ ssh_options[:forward_agent] = true
 set :files_directories,         [ 'public/upload' ]
 set :files_symlinks,            [ 'public/upload' ]
 
-# Server config, won't be here in case of multistage
-server 'localhost', :app, :web, :db, :primary => true
+# # Server config, won't be here in case of multistage
+# server 'localhost', :app, :web, :db, :primary => true
 
 # # default settings
 # set :files_tmp_dir,           'tmp/capistrano-chocopoche/files'
@@ -52,25 +52,26 @@ This script requires the default capistrano tasks to be loaded, then it will:
 - empty rails vars: `shared_children`
 - override the `deploy_to` var to:
 
-    - `/home/#{user}/apps/#{application}.#{stage}`
-    - or `/home/#{user}/apps/#{application}` if the multistage ext is not
-      loaded.
+  - `/home/#{user}/apps/#{application}.#{stage}`
+  - or `/home/#{user}/apps/#{application}` if the multistage ext is not
+    loaded.
 
   Therefore the multistage ext must be required before the railsless-deploy.
 
-- override symlinks related tasks to use relative paths: create_symlink,
-  rollback:revision
+- override symlinks related tasks to use relative paths: `create_symlink`,
+  `rollback:revision`
 
-The last one implements the atomic symlink as suggested in the
+Also the last one implements the atomic symlink as suggested in
 [issue #346](https://github.com/capistrano/capistrano/issues/346).
 
 ## Files
 
 The `download` and `upload` tasks use a temporary directory as pivot, so you are
-able to sync stages together.
+able to sync from a stage to another.
 
-The following scenario assumes that all commands are launch from the dev stage,
-and that you have 3 environements:
+The following scenario assumes that all commands are launched from the dev stage,
+that you have 3 environements and that `:files_directories` and `:files_symlinks`
+are set as in the example:
 
 - dev: may only contains the cap recipe
 - staging: a stage without files and symlinks
@@ -87,8 +88,13 @@ and that you have 3 environements:
                     ├── file2.png
                     ...
 
-`cap prod files:download` would download `prod:my-project/shared/public/upload`
-to `dev:my-project/tmp/capistrano-chocopoche/files/public/upload`:
+### Download
+
+Download `prod:my-project/shared/public/upload` to `dev:my-project/tmp/capistrano-chocopoche/files/public/upload`:
+
+    $ cap prod files:download
+
+    Gives:
 
     my-project.dev/
     ├── current/
@@ -102,28 +108,38 @@ to `dev:my-project/tmp/capistrano-chocopoche/files/public/upload`:
                         ├── file2.png
                         ...
 
-2. `cap dev files:upload` would produce
+### Upload
 
-And finally, a `cap dev files:create_symlinks` woud produce
+Upload `dev:my-project/tmp/capistrano-chocopoche/files/public/upload` to `staging:my-project/shared/public/upload`:
 
-    my-project.dev/
+    $cap staging files:upload
+
+    Gives:
+
+    my-project.staging/
+    ├── current/
+    └── shared/
+        └── public/
+            └── upload/
+                ├── file1.png
+                ├── file2.png
+                ...
+
+### Symlink
+
+Create a symlink from `staging:my-project/shared/public/upload/` to `staging:my-project/current/public/upload/`:
+
+    $ cap staging files:create_symlinks
+
+    Gives:
+
+    my-project.staging/
     ├── current/
     │   └── public/
     │       └── upload/         => symlink to my-project/shared/public/upload/
-    ├── shared/
-    │   └── public/
-    │       └── upload/         => git ignores that folder
-    │           ├── file1.png
-    │           ├── file2.png
-    │           ...
-    └── tmp/
-        └── capistrano-chocopoche/
-            └── files/
-                └── public/
-                    └── upload/
-                        ├── file1.png
-                        ├── file2.png
-                        ...
+    └── shared/
+        └── public/
+            └── upload/         => git ignores that folder
 
 
 ## License
