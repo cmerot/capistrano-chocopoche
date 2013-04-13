@@ -1,0 +1,5 @@
+#!/usr/bin/env ruby
+require 'capistrano/chocopoche/sync-cli'
+
+cli = Capistrano::Chocopoche::SyncCLI.new(ARGV)
+cli.execute

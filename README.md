@@ -2,145 +2,178 @@
 
 My capistrano poche contains:
 
-- another railsless-deploy recipe
-- a files utility to rsync directories
+- a php composer recipe
+- a files utility to rsync directories up and down
+- a mysql utility to dump/import, download/upload databases
+- a bin to help synchronizing multiple stage together: `csync`
+- and a railsless-deploy recipe (which uses the default rails recipes -
+  it may not be a good idea to reimplement...)
 
 ## Installation
 
     $ gem install capistrano-chocopoche
 
-## Capfile example
+## Tasks
+
+```shell
+cap composer                          # Runs an arbitrary composer command
+cap composer:update                   # Runs the composer update command
+cap connect                           # Connects via SSH to the first app server, and executes a `bash --login` to stay connected
+cap deploy                            # Deploys your project.
+cap deploy:check                      # Test deployment dependencies.
+cap deploy:cleanup                    # Clean up old releases.
+cap deploy:create_symlink             # Updates the symlink to the most recently deployed version.
+cap deploy:pending                    # Displays the commits since your last deploy.
+cap deploy:pending:diff               # Displays the `diff' since your last deploy.
+cap deploy:restart                    # Blank task exists as a hook into which to install your own environment specific behaviour.
+cap deploy:rollback                   # Rolls back to a previous version and restarts.
+cap deploy:rollback:code              # Rolls back to the previously deployed version.
+cap deploy:setup                      # Prepares one or more servers for deployment.
+cap deploy:start                      # Blank task exists as a hook into which to install your own environment specific behaviour.
+cap deploy:stop                       # Blank task exists as a hook into which to install your own environment specific behaviour.
+cap deploy:symlink                    # Deprecated API.
+cap deploy:update                     # Copies your project and updates the symlink.
+cap deploy:update_code                # Copies your project to the remote servers.
+cap deploy:upload                     # Copy files to the currently deployed version.
+cap files:create_symlinks             # Creates :files_symlinks from the shared folder to the current one on the app servers.
+cap files:download                    # Sync files from the first web server to the local temp directory.
+cap files:upload                      # Sync files from the local temp directory to the first web server.
+cap files:upload_files_from_templates # Creates files from templates and upload them to the app server.
+cap invoke                            # Invoke a single command on the remote servers.
+cap mysql:download                    # Download last remote dumps of each databases.
+cap mysql:dump                        # Dump databases to remote backup folder.
+cap mysql:import                      # Import last remote dumps to databases.
+cap mysql:upload                      # Upload last local dump of each databases.
+cap shell                             # Begin an interactive Capistrano session.
+```
+
+## Capfile example with multistage
+
+The [short_url](https://github.com/chocopoche/short_url) project uses that
+library, it's a good working example. See the `Capfile` and stages config under
+`config/deploy`.
+
+The Capfile:
 
 ```ruby
 # Capistrao defaults
 load 'deploy'
 
-# Multistage - to be loaded before the railsless-deploy
 require 'capistrano/ext/multistage'
-
-# Rails inhibition
-require 'capistrano-chocopoche/railsless-deploy'
-
-# Rsync tasks
-require 'capistrano-chocopoche/files'
+require 'capistrano/chocopoche'
 
 # Base configuration
 set :application,   "my-project"
-set :repository,    "git@localhost:#{application}.git"
+set :repository,    "git@example.com:my-project.git"
 set :use_sudo,      false
 ssh_options[:forward_agent] = true
 
-# Rsync + symlinks configuration
-set :files_directories,         [ 'public/upload' ]
-set :files_symlinks,            [ 'public/upload' ]
+# Folders to rsync with files:download
+set :files_rsync,    files_rsync    + %w(web/qr)
 
-# # Server config, won't be here in case of multistage
-# server 'localhost', :app, :web, :db, :primary => true
+# Symlinks to create after deploy:update_code
+set :files_symlinks, files_symlinks + %w(web/qr)
 
-# # default settings
-# set :files_tmp_dir,           'tmp/capistrano-chocopoche/files'
-# set :deploy_to,               '/home/#{user}/apps/#{application}[.#{stage}]'
+# # Won't work with the cli command `csync` because the default stage task
+# # will be invoked, but it should not
+# set :default_stage,  'vm'
+
+# Files to be generated on setup
+set :files_tpl, [
+  {
+    :template => "config/deploy/templates/nginx.conf.erb",
+    :dest     => "config/nginx.conf"
+  },
+  {
+    :template => "config/deploy/templates/parameters.yml.erb",
+    :dest     => "config/parameters.yml"
+  }
+]
 ```
 
-## Railsless-deploy
+A stage file in `config/deploy/[stage].rb:
+```
+server 'example.com', :app, :web, :db, :primary => true
 
-This script requires the default capistrano tasks to be loaded, then it will:
+def set_files_tpl_params
+  set :files_tpl_params, {
+    :server   => {
+      :hostname => "#{stage}.example.com"
+    },
+    :database => {
+      :driver   => "pdo_mysql",
+      :dbname   => "dbname",
+      :user     => "user",
+      :password => "password",
+      :host     => "localhost"
+    },
+  }
+end
+```
 
-- delete rails tasks: `migrate`, `migrations`, `cold`
-- empty rails tasks (but keep it for hooks): `finalize_update`
-- delete rails vars: `rails_env`
-- empty rails vars: `shared_children`
-- override the `deploy_to` var to:
+## Capfile example without multistage
 
-  - `/home/#{user}/apps/#{application}.#{stage}`
-  - or `/home/#{user}/apps/#{application}` if the multistage ext is not
-    loaded.
+```ruby
+# Capistrao defaults
+load 'deploy'
 
-  Therefore the multistage ext must be required before the railsless-deploy.
+require 'capistrano/chocopoche'
 
-- override symlinks related tasks to use relative paths: `create_symlink`,
-  `rollback:revision`
+# Base configuration
+set :application,   "my-project"
+set :repository,    "git@example.com:my-project.git"
+set :use_sudo,      false
+ssh_options[:forward_agent] = true
 
-Also the last one implements the atomic symlink as suggested in
-[issue #346](https://github.com/capistrano/capistrano/issues/346).
+# Folders to rsync with files:download
+set :files_rsync,    files_rsync    + %w(web/qr)
 
-## Files
+# Symlinks to create after deploy:update_code
+set :files_symlinks, files_symlinks + %w(web/qr)
 
-The `download` and `upload` tasks use a temporary directory as pivot, so you are
-able to sync from a stage to another.
+# Files to be generated on setup
+set :files_tpl, [
+  {
+    :template => "config/deploy/templates/nginx.conf.erb",
+    :dest     => "config/nginx.conf"
+  },
+  {
+    :template => "config/deploy/templates/parameters.yml.erb",
+    :dest     => "config/parameters.yml"
+  }
+]
 
-The following scenario assumes that all commands are launched from the dev stage,
-that you have 3 environements and that `:files_directories` and `:files_symlinks`
-are set as in the example:
+server 'localhost', :app, :web, :db, :primary => true
 
-- dev: may only contains the cap recipe
-- staging: a stage without files and symlinks
-- prod: a stage with files and symlinks. Prod looks like:
+def set_files_tpl_params
+  set :files_tpl_params, {
+    :server   => {
+      :hostname => "#{stage}.example.com"
+    },
+    :database => {
+      :driver   => "pdo_mysql",
+      :dbname   => "dbname",
+      :user     => "user",
+      :password => "password",
+      :host     => "localhost"
+    },
+  }
+end
+```
 
-        my-project.prod/
-        ├── current/
-        │   └── public/
-        │       └── upload/         => symlink to my-project/shared/public/upload/
-        └── shared/
-            └── public/
-                └── upload/         => git ignores that folder
-                    ├── file1.png
-                    ├── file2.png
-                    ...
+## csync
 
-### Download
+The csync will chain capistrano commands in order to synchronise two stages.
+Example:
 
-Download `prod:my-project/shared/public/upload` to `dev:my-project/tmp/capistrano-chocopoche/files/public/upload`:
+    $ csync mysql prod dev
 
-    $ cap prod files:download
+will dump and download databases from *prod*, then upload and import them to
+*dev*.
 
-    Gives:
+    $ csync files prod dev
 
-    my-project.dev/
-    ├── current/
-    ├── shared/
-    └── tmp/
-        └── capistrano-chocopoche/
-            └── files/
-                └── public/
-                    └── upload/
-                        ├── file1.png
-                        ├── file2.png
-                        ...
-
-### Upload
-
-Upload `dev:my-project/tmp/capistrano-chocopoche/files/public/upload` to `staging:my-project/shared/public/upload`:
-
-    $cap staging files:upload
-
-    Gives:
-
-    my-project.staging/
-    ├── current/
-    └── shared/
-        └── public/
-            └── upload/
-                ├── file1.png
-                ├── file2.png
-                ...
-
-### Symlink
-
-Create a symlink from `staging:my-project/shared/public/upload/` to `staging:my-project/current/public/upload/`:
-
-    $ cap staging files:create_symlinks
-
-    Gives:
-
-    my-project.staging/
-    ├── current/
-    │   └── public/
-    │       └── upload/         => symlink to my-project/shared/public/upload/
-    └── shared/
-        └── public/
-            └── upload/         => git ignores that folder
-
+will rsync files from *prod* to *dev*.
 
 ## License
 
